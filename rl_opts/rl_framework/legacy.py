@@ -14,12 +14,15 @@ class TargetEnv():
                  Nt,
                  L,
                  r,
-                 lc,
+                 rot_diff,
+                 trans_diff,
+                 prop_vel,
+                 lc = 1,
                  agent_step = 1,
                  boundary_condition = 'periodic',
                  num_agents = 1,
                  high_den = 5,
-                 destructive = False):
+                 destructive = True):
         
         """Class defining the foraging environment. It includes the methods needed to place several agents to the world.
         
@@ -54,9 +57,12 @@ class TargetEnv():
         self.high_den = high_den
         self.destructive_targets = destructive
         
+        self.rot_diff = rot_diff
+        self.trans_diff = trans_diff
+        self.prop_vel = prop_vel
+        
         self.init_env()
-        
-        
+             
     def init_env(self):
         """
         Environment initialization.
@@ -77,9 +83,9 @@ class TargetEnv():
             self.current_directions[ag] = np.random.rand()*2*np.pi
             self.positions[ag] = np.random.rand(2)*(self.L) 
         self.previous_pos = self.positions.copy()
-          
-        
-    def update_pos(self, change_direction, agent_index=0):        
+        # self.previous_directions = self.directions.copy()
+               
+    def update_pos(self, old_phase, new_phase, delta_t, agent_index=0):        
         """
         Updates information of the agent depending on its decision.
 
@@ -91,16 +97,21 @@ class TargetEnv():
             Index of the given agent. The default is 0.
         """
         
+        # Random noise
+        xi = np.random.normal(0, 1, size=2)
+        eta = np.random.normal(0, 1)
         
         # Save previous position to check if crossing happened
         self.previous_pos[agent_index] = self.positions[agent_index].copy()
         
-        if change_direction:
+        if new_phase==1 and old_phase==1:
+            self.current_directions[agent_index] = self.current_directions[agent_index] + np.sqrt(2 * self.rot_diff * delta_t) * eta
+        if new_phase==1 and old_phase==0:
             self.current_directions[agent_index] = np.random.rand(1)*2*np.pi
-        
+            
         #Update position
-        self.positions[agent_index][0] = self.positions[agent_index][0] + self.agent_step*np.cos(self.current_directions[agent_index])
-        self.positions[agent_index][1] = self.positions[agent_index][1] + self.agent_step*np.sin(self.current_directions[agent_index])
+        self.positions[agent_index][0] = self.positions[agent_index][0] + self.prop_vel * np.cos(self.current_directions[agent_index]) * new_phase * delta_t + np.sqrt(2 * self.trans_diff * delta_t) * xi[0]
+        self.positions[agent_index][1] = self.positions[agent_index][1] + self.prop_vel * np.sin(self.current_directions[agent_index]) * new_phase * delta_t + np.sqrt(2 * self.trans_diff * delta_t) * xi[1]
         
        
     def check_encounter(self, agent_index=0):
@@ -164,72 +175,6 @@ class TargetEnv():
         self.positions[agent_index] = (self.positions[agent_index])%self.L
         
 
-    def get_neighbors_state(self, focal_agent, visual_cone, visual_radius):
-        """
-        Gets the visual information of the agents surrounding the focal agent.
-
-        Parameters
-        ----------
-        focal_agent : int 
-            Index of focal agent.
-        visual_cone : float 
-            Angle (rad) of the visual cone in front of the agent.
-        visual_radius : int/float
-            Radius of the visual circular region around the agent. 
-            
-        Returns
-        -------
-        State: list
-            [density of rewarded agents in front, same at the back].
-            density values: 0 -- no rewarded agent, 1 -- low # of rewarded agents, 2 -- more than high_den rewarded agents.
-
-        """
-        mask_in_sight, mask_behind = self.get_agents_in_sight(focal_agent, visual_cone, visual_radius)
-        
-        num_success_infront = np.sum(mask_in_sight * self.last_step_rewards)
-        num_success_behind = np.sum(mask_behind * self.last_step_rewards)
-              
-        return [np.argwhere((np.array([0, 1, self.high_den, self.num_agents]) - int(num_success_infront)) <= 0)[-1][0],
-                np.argwhere((np.array([0, 1, self.high_den, self.num_agents]) - int(num_success_behind)) <= 0)[-1][0]]
-        
-    
-    def get_agents_in_sight(self, focal_agent, visual_cone, visual_radius):
-        """
-        Get which agents are within the front visual cone of the focal agent.
-
-        Parameters
-        ----------
-        focal_agent : int
-            Index of focal agent.
-        visual_cone : float
-            Angle (rad) of the visual cone in front of the agent.
-        visual_radius : int/float
-            Radius of the visual circular region around the agent. 
-            
-
-        Returns
-        -------
-        mask_in_sight : np.array of boolean values
-            True at the indices of agents that are within the visual cone in front.
-        mask_behind : np.array of boolean values
-            True at the indices of agents that are within the visual range, but outside the front cone.
-
-        """
-        
-        y = coord_mod(self.previous_pos[:,1], self.positions[focal_agent,1], self.L)
-        x = coord_mod(self.previous_pos[:,0], self.positions[focal_agent,0], self.L)
-        
-        mask_inside_radius = np.sqrt(x**2 + y**2) < visual_radius
-        
-        mask_in_sight = (np.abs((np.arctan2(y,x) + 2*np.pi) % (2*np.pi) - self.current_directions[focal_agent]) < visual_cone / 2 ) * mask_inside_radius
-        mask_behind = mask_inside_radius ^ mask_in_sight
-        
-        mask_in_sight[focal_agent] = False
-        mask_behind[focal_agent] = False
-        
-        return mask_in_sight, mask_behind
-    
-
 # %% ../../nbs/lib_nbs/01_rl_framework.ipynb 9
 class PSAgent():
     
@@ -275,8 +220,6 @@ class PSAgent():
         self.beta_softmax = beta_softmax
         self.initial_prob_distr = initial_prob_distr
         self.fixed_policy = fixed_policy
-        
-        print(num_percepts_list)
         
         self.num_percepts = int(np.prod(np.array(self.num_percepts_list).astype(np.float64))) # total number of possible percepts
         
@@ -436,9 +379,9 @@ class Forager(PSAgent):
         self.visual_cone = visual_cone
         self.visual_radius = visual_radius
         
-        num_states_list = [len(i) for i in self.state_space]
+        num_states_list = [len(i) for i in self.state_space] #Creating num_percepts_list
         
-        super().__init__(num_actions, num_states_list, **kwargs)
+        super().__init__(num_actions, num_states_list, **kwargs) #Paasing arguments to parent class
         
         #initialize the step counter n
         self.agent_state = 0
