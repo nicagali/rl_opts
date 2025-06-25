@@ -27,7 +27,7 @@ def learning(config, results_path, run):
     """
     
     #Simulation parameters
-    TAU = config['WORLD_SIZE']^2/(4*config['TRANS_DIF']) #characteristic time passive diffusion
+    # TAU = config['WORLD_SIZE']^2/(4*config['TRANS_DIF']) #characteristic time passive diffusion
     TIME_EP = config['MAX_STEP_L'] #time steps per episode
     EPISODES = config['NUM_EPISODES'] #number of episodes
     
@@ -47,100 +47,6 @@ def learning(config, results_path, run):
         INITIAL_DISTR = []
         for percept in range(NUM_STATES):
             INITIAL_DISTR.append([0.99, 0.01])
-            
-    # print(INITIAL_DISTR)
-            
-    agent = Forager(num_actions=config['NUM_ACTIONS'],
-                    state_space=STATE_SPACE,
-                    gamma_damping=config['GAMMA'],
-                    eta_glow_damping=config['ETA_GLOW'],
-                    initial_prob_distr=INITIAL_DISTR)
-    
-    for e in range(EPISODES):
-        
-        #initialize environment and agent's counter and g matrix
-        env.init_env()
-        agent.agent_state = 0
-        agent.reset_g()
-    
-        for t in range(TIME_EP):
-            
-            #step to set counter to its min value n=1
-            if t == 0 or env.kicked[0]:
-                #do one step with random direction (no learning in this step)
-                env.update_pos(1)
-                #check boundary conditions
-                env.check_bc()
-                #reset counter
-                agent.agent_state = 0
-                #set kicked value to false again
-                env.kicked[0] = 0
-                
-            else:
-                #get perception
-                state = agent.get_state()
-                # print(state)
-                #decide
-                action = agent.deliberate(state)
-                #act (update counter)
-                agent.act(action)
-                
-                #update positions
-                env.update_pos(action)
-                #check if target was found + kick if it is
-                reward = env.check_encounter()
-                    
-                #check boundary conditions
-                env.check_bc()
-                #learn
-                agent.learn(reward)
-                
-                
-        # if (e+1)%500 == 0:
-            #save h matrix of the agent at this stage of the learning process
-        np.save(results_path+'memory_agent_'+str(run)+'_episode_'+str(e+1)+'.npy', agent.h_matrix)
-                
-
-def simulate_walk(config, results_path, run, learn=False):
-    """
-    Training of the RL agent
-    
-    Parameters
-    ----------
-
-    config : dict
-        Dictionary with all the parameters
-    results_path : str
-        Path to save the results
-    run : int
-        Agent identifier
-    
-    """
-    
-    #Simulation parameters
-    
-    EPISODES = config['NUM_EPISODES'] #number of episodes
-    TAUS = config['NUM_TAUS'] #number of char taus per episodes
-    TIME_STEPS = config['TIME_STEP_IN_TAU'] #time steps per characteristic time tau
-    
-    #initialize environment
-    env = TargetEnv(Nt=config['NUM_TARGETS'], L=config['WORLD_SIZE'], r=config['r'], lc=config['lc'])
-    
-    #initialize agent 
-    STATE_SPACE = [ np.arange(2), np.linspace(0, config['MAX_STEP_L']-1, config['NUM_BINS']),]
-    # print(STATE_SPACE, len(STATE_SPACE[0]), len(STATE_SPACE[1]), len(STATE_SPACE[2]))
-    NUM_STATES = np.prod([len(i) for i in STATE_SPACE])
-    
-    #default initialization policy
-    if config['PI_INIT'] == 0.5:
-        INITIAL_DISTR = None
-    #change initialization policy
-    elif config['PI_INIT'] == 0.99:
-        INITIAL_DISTR = []
-        for percept in range(NUM_STATES):
-            INITIAL_DISTR.append([0.99, 0.01])
-            
-    # print(INITIAL_DISTR)
             
     agent = Forager(num_actions=config['NUM_ACTIONS'],
                     state_space=STATE_SPACE,

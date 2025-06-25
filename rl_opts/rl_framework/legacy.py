@@ -129,7 +129,7 @@ class TargetEnv():
         """
         
         encounters = isBetween_c_Vec(self.previous_pos[agent_index], self.positions[agent_index], self.target_positions, self.r)
-        
+
         self.last_step_rewards[agent_index] = self.current_rewards[agent_index].copy()
         
         if sum(encounters) > 0: 
@@ -172,7 +172,10 @@ class TargetEnv():
         Updates position coordinates of agent agent_index to fulfill periodic boundary conditions.
 
         """
+        # print(self.positions[agent_index], self.L)
         self.positions[agent_index] = (self.positions[agent_index])%self.L
+        # print(self.positions[agent_index])
+        
         
 
 # %% ../../nbs/lib_nbs/01_rl_framework.ipynb 9
@@ -254,7 +257,7 @@ class PSAgent():
         """
         
         percept = 0
-        for which_feature in range(len(observation)):
+        for which_feature in range(len(observation)): # loop over phi and w
             percept += int(observation[which_feature] * np.prod(self.num_percepts_list[:which_feature]))
         return percept
     
@@ -355,36 +358,23 @@ class PSAgent():
 # %% ../../nbs/lib_nbs/01_rl_framework.ipynb 11
 class Forager(PSAgent):
     
-    def __init__(self, state_space, num_actions, visual_cone= np.pi, visual_radius=1.0, **kwargs):
+    def __init__(self, **kwargs):
         """
-        This class extends the general `PSAgent` class and adapts it to the foraging scenario·
+        This class extends the general `PSAgent` class and adapts it to the phase changing scenario·
 
         Parameters
         ----------
-        state_space : list
-            List where each entry is the state space of each perceptual feature.
-            E.g. [state space of step counter, state space of density of successful neighbours].
-        num_actions : int
-            Number of actions.
-        visual_cone : float, optional
-            Visual cone (angle, in radians) of the forager, useful in scenarios with ensembles of agents. The default is np.pi.
-        visual_radius : float, optional
-            Radius of the visual region, useful in scenarious with ensembles of agents. The default is 1.0.
+            
         **kwargs : multiple
             Parameters of the class that defines the learning agent.
 
         """
         
-        self.state_space = state_space
-        self.visual_cone = visual_cone
-        self.visual_radius = visual_radius
+        super().__init__(**kwargs) #Passing arguments to parent class
         
-        num_states_list = [len(i) for i in self.state_space] #Creating num_percepts_list
-        
-        super().__init__(num_actions, num_states_list, **kwargs) #Paasing arguments to parent class
-        
-        #initialize the step counter n
-        self.agent_state = 0
+        #initialize the phase duration counter 
+        self.phase = 0
+        self.duration = 0
     
     def act(self, action):
         """
@@ -393,37 +383,14 @@ class Forager(PSAgent):
         Parameters
         ----------
         action : int (0, 1)
-            1 if it changes direction, 0 otherwise
+            1 if it changes phase, 0 otherwise
         """
         
         # If the agent changes direction   
         if action == 1:
-            self.agent_state = 0
+            self.phase = 1 - self.phase
+            self.duration = 0
         else:
-            self.agent_state += 1        
+            self.duration += 1        
           
-    def get_state(self, visual_perception=[0,0]):
-        """
-        Gets the total state of the agent, combining the internal perception (#steps in same direction)
-        and the external information of the other agents.
-                                                                             
-        Parameters
-        ----------
-        visual_perception : list, optional 
-            List with the visual perception of surrounding agents,
-            [density rewarded agents in front, density of rewarded agents at the back]. 
-            The default is [0,0], for when there is only one agent.
-
-        Returns
-        -------
-        Final state: list
-            [internal state, external visual information]
-
-        """
-
-        #state related to step counter
-        internal_state = list(np.argwhere((self.state_space[0] - self.agent_state) <= 0)[-1])
-        
-        return internal_state + visual_perception
-        
     
