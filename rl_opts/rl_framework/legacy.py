@@ -98,13 +98,14 @@ class TargetEnv():
         """
         
         # Random noise
+        np.random.seed()
         xi = np.random.normal(0, 1, size=2)
-        eta = np.random.normal(0, 1)
         
         # Save previous position to check if crossing happened
         self.previous_pos[agent_index] = self.positions[agent_index].copy()
         
         if new_phase==1 and old_phase==1:
+            eta = np.random.normal(0, 1)
             self.current_directions[agent_index] = self.current_directions[agent_index] + np.sqrt(2 * self.rot_diff * delta_t) * eta
         if new_phase==1 and old_phase==0:
             self.current_directions[agent_index] = np.random.rand(1)*2*np.pi
@@ -358,7 +359,7 @@ class PSAgent():
 # %% ../../nbs/lib_nbs/01_rl_framework.ipynb 11
 class Forager(PSAgent):
     
-    def __init__(self, **kwargs):
+    def __init__(self, state_space, **kwargs):
         """
         This class extends the general `PSAgent` class and adapts it to the phase changing scenario·
 
@@ -370,11 +371,14 @@ class Forager(PSAgent):
 
         """
         
+        self.state_space = state_space
+        
         super().__init__(**kwargs) #Passing arguments to parent class
         
         #initialize the phase duration counter 
         self.phase = 0
         self.duration = 0
+        self.duration_binned = 0
     
     def act(self, action):
         """
@@ -392,5 +396,22 @@ class Forager(PSAgent):
             self.duration = 0
         else:
             self.duration += 1        
+            
+    def bin_state(self):
+        """
+        Bin phase duration.
+
+        Parameters
+        ----------
+        duration : int [0, tau]
+            Duration of a phase in step time 
+            
+        """
+        
+        binned_duration = np.argwhere((self.state_space[1] - self.duration) <= 0)[-1][0]
+        
+        return binned_duration
+        
+        
           
     
